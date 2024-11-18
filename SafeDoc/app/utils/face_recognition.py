@@ -1,8 +1,8 @@
 import requests
 
 # Substitua pela sua chave e URL do serviço cognitivo
-SUBSCRIPTION_KEY = "SUA_CHAVE_AQUI"
-ENDPOINT = "SUA_URL_AQUI"  # URL do seu serviço cognitivo no Azure
+SUBSCRIPTION_KEY = "b6d97d4a-1734-48ef-ae23-22fba0b5badf"
+ENDPOINT = "https://brazilsouth.api.cognitive.microsoft.com/"  # URL do seu serviço cognitivo no Azure
 
 def analyze_image(image_path):
     image_url = image_path  # Para simplificação, usamos o caminho local da imagem
