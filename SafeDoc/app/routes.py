@@ -3,11 +3,18 @@ from app.models import User
 from app.db import db
 from app.utils.face_recognition import verify_face
 import os
+from enviarArquivosVM import send_to_vm_linux, send_to_vm_windows
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://azureadmin:Admsenac123@a@sqlserver-safedoc.database.windows.net/SafeDocDb?driver=ODBC+Driver+17+for+SQL+Server'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://azureadmin:Admsenac123@sqlserver-safedoc.database.windows.net/SafeDocDb?driver=ODBC+Driver+17+for+SQL+Server'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 db.init_app(app)
+
+# IPs e credenciais das VMs
+VM_LINUX_IP = '191.232.190.174'
+VM_WINDOWS_IP = '4.228.59.146'
+VM_USERNAME = 'azureuser'
+VM_PASSWORD = 'Admsenac123@'
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -32,7 +39,12 @@ def register():
         new_user = User(name=name, email=email, photo_path=photo_path, document_path=document_path)
         db.session.add(new_user)
         db.session.commit()
-        flash('Usuário registrado com sucesso!')
+
+        # Enviar arquivos para as VMs
+        send_to_vm_windows(photo_path, VM_WINDOWS_IP, VM_USERNAME, VM_PASSWORD)
+        send_to_vm_linux(document_path, VM_LINUX_IP, VM_USERNAME, VM_PASSWORD)
+
+        flash('Usuário registrado e arquivos enviados com sucesso!')
         return redirect('/consult')
 
     return render_template('register.html')
@@ -44,4 +56,3 @@ def consult():
         users = User.query.filter_by(name=name).all()
         return render_template('consult.html', users=users)
     return render_template('consult.html', users=None)
-
