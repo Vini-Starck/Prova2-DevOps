@@ -1,18 +1,13 @@
-from flask import render_template, request, redirect, url_for
-from werkzeug.utils import secure_filename
-import os
-from app import app, db
+from flask import Flask, request, render_template, redirect, flash
 from app.models import User
-from app.utils.face_recognition import analyze_image
+from app.db import db
+from app.utils.face_recognition import verify_face
+import os
 
-# Função para verificar se o arquivo tem uma extensão permitida
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@app.route('/')
-def index():
-    return render_template('index.html')
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://azureadmin:Admsenac123@a@sqlserver-safedoc.database.windows.net/SafeDocDb?driver=ODBC+Driver+17+for+SQL+Server'
+app.config['UPLOAD_FOLDER'] = 'uploads'
+db.init_app(app)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -22,37 +17,31 @@ def register():
         photo = request.files['photo']
         document = request.files['document']
 
-        if photo and allowed_file(photo.filename) and document and allowed_file(document.filename):
-            # Salvar foto e documento
-            photo_filename = secure_filename(photo.filename)
-            document_filename = secure_filename(document.filename)
+        # Salvar arquivos temporariamente
+        photo_path = os.path.join(app.config['UPLOAD_FOLDER'], 'photos', photo.filename)
+        document_path = os.path.join(app.config['UPLOAD_FOLDER'], 'documents', document.filename)
+        photo.save(photo_path)
+        document.save(document_path)
 
-            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], 'photos', photo_filename)
-            document_path = os.path.join(app.config['UPLOAD_FOLDER'], 'documents', document_filename)
+        # Verificar rosto na foto usando o Serviço Cognitivo
+        if not verify_face(photo_path):
+            flash('Imagem inválida: não foi detectado um rosto humano.')
+            return redirect('/register')
 
-            # Criar diretórios se não existirem
-            os.makedirs(os.path.dirname(photo_path), exist_ok=True)
-            os.makedirs(os.path.dirname(document_path), exist_ok=True)
-
-            photo.save(photo_path)
-            document.save(document_path)
-
-            # Analisar imagem para verificar se contém uma pessoa
-            analysis_result = analyze_image(photo_path)
-
-            if not analysis_result:
-                return "A imagem não contém uma pessoa válida. Tente novamente."
-
-            # Salvar dados no banco de dados
-            user = User(name=name, email=email, photo=photo_path, document=document_path)
-            db.session.add(user)
-            db.session.commit()
-
-            return redirect(url_for('consult'))
+        # Registrar usuário no banco
+        new_user = User(name=name, email=email, photo_path=photo_path, document_path=document_path)
+        db.session.add(new_user)
+        db.session.commit()
+        flash('Usuário registrado com sucesso!')
+        return redirect('/consult')
 
     return render_template('register.html')
 
-@app.route('/consult')
+@app.route('/consult', methods=['GET', 'POST'])
 def consult():
-    users = User.query.all()  # Consulta no banco de dados
-    return render_template('consult.html', users=users)
+    if request.method == 'POST':
+        name = request.form['name']
+        users = User.query.filter_by(name=name).all()
+        return render_template('consult.html', users=users)
+    return render_template('consult.html', users=None)
+
